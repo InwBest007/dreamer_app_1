@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
-//import 'package:project_dreamer_app/main.dart';
+import 'package:project_dreamer_app/main.dart';
 import 'package:intl/intl.dart';
 import 'package:project_dreamer_app/screens/dream_input_screen.dart';
 
@@ -33,7 +33,7 @@ class _DreamCalendarScreenState extends State<DreamCalendarScreen> {
           TableCalendar(
             locale: 'th_TH',
             focusedDay: _focusedDay,
-            firstDay: DateTime.utc(2020, 1, 1),
+            firstDay: DateTime.utc(2024, 1, 1),
             lastDay: DateTime.utc(2050, 12, 31),
             selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
             onDaySelected: (selectedDay, focusedDay){
