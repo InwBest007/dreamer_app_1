@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "616465545953",
+    "project_id": "dreamerdb-b0dc4",
+    "storage_bucket": "dreamerdb-b0dc4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:616465545953:android:b334bc798bc65e9c12d5a0",
+        "android_client_info": {
+          "package_name": "com.example.dreamer_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDVkkOffk8ntCV9_tyzad4E6PkbSnGfKxg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:616465545953:android:25cdaa697fdbc12912d5a0",
+        "android_client_info": {
+          "package_name": "com.example.project_dreamer_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDVkkOffk8ntCV9_tyzad4E6PkbSnGfKxg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

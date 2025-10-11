@@ -1,0 +1,46 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "dreamerdb-b0dc4",
+          "appId": "1:616465545953:android:25cdaa697fdbc12912d5a0",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "dreamerdb-b0dc4",
+          "configurations": {
+            "android": "1:616465545953:android:25cdaa697fdbc12912d5a0",
+            "ios": "1:616465545953:ios:7715ac03b1542e8b12d5a0",
+            "macos": "1:616465545953:ios:7715ac03b1542e8b12d5a0",
+            "web": "1:616465545953:web:7a581f9e582b565d12d5a0",
+            "windows": "1:616465545953:web:0fd5f0377af81fa912d5a0"
+          }
+        }
+      }
+    }
+  },
+
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs20",
+      "env": {
+        "PYTHON_PATH": "/usr/bin/python3"
+      },
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ]
+}
