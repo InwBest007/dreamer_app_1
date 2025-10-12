@@ -1,8 +1,11 @@
+// DreamInputScreen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
-import 'dream_result_screen.dart';
+
+// เพิ่ม import สำหรับหน้ารอประมวลผล
+import 'dream_loading_screen.dart';
 
 class DreamInputScreen extends StatefulWidget {
   const DreamInputScreen({super.key});
@@ -17,98 +20,171 @@ class _DreamInputScreenState extends State<DreamInputScreen> {
 
   String? selectedType;
   String? selectedEmotion;
-  String selectedPrediction = 'AI';
+  String selectedPrediction = 'Astrology';
+
+  final List<String> predictionModels = [
+    'Astrology',
+    'AI',
+  ];
 
   final List<String> dreamTypes = [
-    'Normal dream (ความฝันปกติ)',
-    'Nightmare (ฝันร้าย)',
-    'False Awakening Dream (ฝันว่าตื่น)',
-    'Lucid Dream (ความฝันที่รู้ตัวว่ากำลังฝัน)',
+    'ความฝันปกติ',
+    'ฝันร้าย',
+    'ฝันว่าตื่น',
+    'ความฝันที่รู้ตัวว่ากำลังฝัน',
   ];
   final List<String> emotions = [
-    'ความกลัว', 'ความเศร้า', 'ความตื่นเต้น',
-    'ความโกรธ', 'เพลิดเพลิน', 'ความประหลาดใจ'
+    'กลัว',
+    'เศร้า',
+    'ตื่นเต้น',
+    'โกรธ',
+    'เพลิดเพลิน',
+    'ประหลาดใจ'
   ];
 
   Future<void> _handleSubmit() async {
-  String dreamText = _content.text.trim();
-  String titleText = _title.text.trim();
+    String dreamText = _content.text.trim();
+    String titleText = _title.text.trim();
 
-  if (dreamText.isEmpty || titleText.isEmpty) {
-    _showDialog('รบกวนกรอกข้อมูลความฝันให้ครบถ้วน');
-    return;
-  }
-
-  try {
-    // บันทึกความฝันลง Firestore ก่อน
-    await FirebaseFirestore.instance.collection("dreamEntries").add({
-      "title": titleText,
-      "content": dreamText,
-      "type": selectedType ?? "ไม่ระบุ",
-      "emotion": selectedEmotion ?? "ไม่ระบุ",
-      "date": DateTime.now(),
-    });
-
-    // ล้างค่า input
-    _title.clear();
-    _content.clear();
-
-    // แจ้งผู้ใช้
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("บันทึกความฝันเรียบร้อย ✨")),
-    );
-
-    // เรียก FastAPI
-    final response = await http.post(
-      Uri.parse("http://10.0.2.2:8000/analyze"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"dream": dreamText}),
-    );
-
-    if (response.statusCode == 200) {
-      final result = jsonDecode(response.body);
-      List matchedKeywords = result['matched_keywords'];
-
-      if (matchedKeywords.isEmpty) {
-        _showDialog("ไม่เจอคำสำคัญในความฝัน");
-        return;
-      }
-
-      // ใช้ keyword ไปค้น Firestore อีกครั้ง
-      final snapshot = await FirebaseFirestore.instance
-          .collection("dreamInt1")
-          .where("keyword", isEqualTo: matchedKeywords.first)
-          .limit(1)
-          .get();
-
-      if (snapshot.docs.isNotEmpty) {
-        final data = snapshot.docs.first.data();
-        final interpretation = data['interpretation'] ?? 'ไม่พบคำทำนาย';
-        final luckNumber = data['luckynumber'] ?? '-';
-        final imageUrl = data['imageUrl'] ?? 'https://placehold.co/300x300';
-
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DreamResultScreen(
-              dreamTitle: titleText,
-              dreamStory: dreamText,
-              dreamImageUrl: imageUrl,
-              dreamInterpretation: interpretation,
-              luckyNumber: luckNumber,
-            ),
-          ),
-        );
-      } else {
-        _showDialog("ไม่พบคำทำนายสำหรับ '${matchedKeywords.first}'");
-      }
-    } else {
-      _showDialog("API มีปัญหา: ${response.body}");
+    if (dreamText.isEmpty || titleText.isEmpty) {
+      _showDialog('รบกวนกรอกข้อมูลความฝันให้ครบถ้วน');
+      return;
     }
-  } catch (e) {
-    _showDialog("ไม่สามารถประมวลผลได้: $e");
+
+    try {
+      // บันทึกความฝันลง Firestore ก่อน
+      final docRef =
+          await FirebaseFirestore.instance.collection("dreamEntries").add({
+        "title": titleText,
+        "content": dreamText,
+        "type": selectedType ?? "ไม่ระบุ",
+        "emotion": selectedEmotion ?? "ไม่ระบุ",
+        "date": DateTime.now(),
+        "model": selectedPrediction, // บันทึกว่าใช้โมเดลไหน
+      });
+
+      final dreamId = docRef.id;
+
+      // ล้างค่า input
+      _title.clear();
+      _content.clear();
+      dreamTypes.clear();
+      emotions.clear();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("บันทึกความฝันสำเร็จ ✨")),
+      );
+
+      // โค้ดเดิมที่ประมวลผลทันที
+      /*
+      String baseUrl = (Theme.of(context).platform == TargetPlatform.android)
+          ? "http://10.0.2.2:8000"
+          : "http://localhost:8000";
+
+      // ✅ เลือก endpoint ตามโมเดล
+      final endpoint =
+          (selectedPrediction == "AI") ? "/analyze_ai" : "/analyze";
+
+      final response = await http
+          .post(
+            Uri.parse("$baseUrl$endpoint"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"dream": dreamText}),
+          )
+          .timeout(const Duration(minutes: 3));
+
+      debugPrint("Raw response status: ${response.statusCode}");
+      debugPrint("Raw response body: ${response.body}");
+      */
+
+      // หน้ารอประมวลผล
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DreamLoadingScreen(
+            processDream: () async {
+              String baseUrl =
+                  (Theme.of(context).platform == TargetPlatform.android)
+                      ? "http://10.0.2.2:8000"
+                      : "http://localhost:8000";
+
+              final endpoint =
+                  (selectedPrediction == "AI") ? "/analyze_ai" : "/analyze";
+
+              final response = await http
+                  .post(
+                    Uri.parse("$baseUrl$endpoint"),
+                    headers: {"Content-Type": "application/json"},
+                    body: jsonEncode({"dream": dreamText}),
+                  )
+                  .timeout(const Duration(minutes: 3));
+
+              if (response.statusCode == 200) {
+                final result = jsonDecode(response.body);
+                String imageUrl = result['image_url'] ?? '';
+
+                List<Map<String, dynamic>> interpretations = [];
+                String luckyNumbersString = '';
+
+                if (selectedPrediction == "Astrology") {
+                  List matchedKeywords = result['matched_keywords'];
+                  final snapshot = await FirebaseFirestore.instance
+                      .collection("dreamInt1")
+                      .where("keyword",
+                          whereIn: matchedKeywords.take(10).toList())
+                      .get();
+
+                  Map<String, Map<String, dynamic>> interpretationMap = {};
+                  for (var doc in snapshot.docs) {
+                    final data = doc.data();
+                    final keyword = data['keyword'];
+                    interpretationMap[keyword] = {
+                      'keyword': keyword,
+                      'interpretation':
+                          data['interpretation'] ?? 'ไม่พบคำทำนาย',
+                      'luckynumber': data['luckynumber'] ?? '-',
+                    };
+                  }
+                  interpretations = interpretationMap.values.toList();
+
+                  final uniqueLuckyNumbers = interpretations
+                      .map((e) => e['luckynumber'] ?? '-')
+                      .toSet()
+                      .toList();
+                  luckyNumbersString = uniqueLuckyNumbers.join(', ');
+                } else {
+                  interpretations = [
+                    {
+                      'keyword': 'AI Model',
+                      'interpretation':
+                          result['ai_interpretation'] ?? 'ไม่มีคำทำนาย',
+                      'luckynumber': result['ai_luckynumber'] ?? '-',
+                    }
+                  ];
+                  luckyNumbersString = result['ai_luckynumber'] ?? '-';
+                }
+
+                // ส่งข้อมูลกลับให้หน้ารอประมวลผลนำไปต่อ
+                return {
+                  'dreamId': dreamId,
+                  'dreamTitle': titleText,
+                  'dreamStory': dreamText,
+                  'dreamImageUrl': imageUrl,
+                  'dreamInterpretation': interpretations,
+                  'luckyNumber': luckyNumbersString,
+                  'model': selectedPrediction,
+                };
+              } else {
+                throw Exception("API Error: ${response.statusCode}");
+              }
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      _showDialog("ไม่สามารถประมวลผลได้: $e");
+    }
   }
-}
 
   void _showDialog(String message) {
     showDialog(
@@ -128,12 +204,15 @@ class _DreamInputScreenState extends State<DreamInputScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedDate = ModalRoute.of(context)!.settings.arguments as DateTime;
+    final selectedDate =
+        (ModalRoute.of(context)?.settings.arguments as DateTime?) ??
+            DateTime.now();
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
           'บันทึกความฝัน ของวันที่ (${selectedDate.day}/${selectedDate.month}/${selectedDate.year})',
-          style: TextStyle(color: Colors.white),
+          style: const TextStyle(color: Colors.white),
         ),
         backgroundColor: Colors.deepPurple,
       ),
@@ -144,13 +223,72 @@ class _DreamInputScreenState extends State<DreamInputScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('ชื่อเรื่องความฝัน'),
-              TextField(controller: _title),
+              TextField(
+                controller: _title,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: "กรอกชื่อเรื่อง",
+                ),
+              ),
               const SizedBox(height: 12),
               const Text('เนื้อหาความฝัน'),
-              TextField(controller: _content),
+              TextField(
+                controller: _content,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: "กรอกเนื้อหาความฝัน",
+                ),
+              ),
               const SizedBox(height: 16),
+              const Text("ประเภทความฝัน"),
+              DropdownButtonFormField<String>(
+                value: selectedType,
+                hint: const Text("เลือกประเภทความฝัน"),
+                items: dreamTypes.map((type) {
+                  return DropdownMenuItem(value: type, child: Text(type));
+                }).toList(),
+                onChanged: (val) {
+                  setState(() {
+                    selectedType = val;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              const Text("อารมณ์ความฝัน"),
+              DropdownButtonFormField<String>(
+                value: selectedEmotion,
+                hint: const Text("เลือกอารมณ์"),
+                items: emotions.map((emo) {
+                  return DropdownMenuItem(value: emo, child: Text(emo));
+                }).toList(),
+                onChanged: (val) {
+                  setState(() {
+                    selectedEmotion = val;
+                  });
+                },
+              ),
+              const Text("เลือกโมเดลการทำนาย"),
+              DropdownButtonFormField<String>(
+                value: selectedPrediction,
+                items: predictionModels.map((model) {
+                  return DropdownMenuItem(value: model, child: Text(model));
+                }).toList(),
+                onChanged: (val) {
+                  setState(() {
+                    selectedPrediction = val!;
+                  });
+                },
+              ),
+              const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _handleSubmit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
                 child: const Text("บันทึกความฝัน"),
               ),
             ],
