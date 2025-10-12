@@ -16,7 +16,7 @@ class _DreamStatScreenState extends State<DreamStatScreen> {
   Map<String, int> emotionCounts = {};
   Map<String, int> dailyCounts = {};
 
-  // ✨ เพิ่มตัวแปรใหม่เพื่อเก็บข้อมูลเสียงเฉลี่ยและสรุปผล
+  // ตัวแปรเพื่อเก็บข้อมูลเสียงเฉลี่ยและสรุปผล
   Map<String, double> avgSoundPerType = {};
   String soundDreamInsight = "";
 
@@ -276,7 +276,7 @@ class _DreamStatScreenState extends State<DreamStatScreen> {
     );
   }
 
-  // กราฟเส้น = ความถี่รายวัน
+  // กราฟเส้นความถี่รายวัน
   Widget _buildLineChart() {
     if (dailyCounts.isEmpty) return const Center(child: Text("ไม่มีข้อมูล"));
 
@@ -301,7 +301,7 @@ class _DreamStatScreenState extends State<DreamStatScreen> {
     ));
   }
 
-  // กราฟวงกลม = ประเภทฝัน / อารมณ์
+  // กราฟพายประเภทฝัน / อารมณ์
   Widget _buildPieChart(Map<String, int> dataMap) {
     if (dataMap.isEmpty) return const Center(child: Text("ไม่มีข้อมูล"));
 
@@ -321,7 +321,7 @@ class _DreamStatScreenState extends State<DreamStatScreen> {
     return PieChart(PieChartData(sections: sections));
   }
 
-  // กราฟแท่ง = ค่าเสียงเฉลี่ยเทียบกับประเภทความฝัน
+  // กราฟแท่งค่าเสียงเฉลี่ยเทียบกับประเภทความฝัน
   Widget _buildBarChart(Map<String, double> dataMap) {
     if (dataMap.isEmpty) return const Center(child: Text("ไม่มีข้อมูลเสียงในช่วงนี้"));
 
