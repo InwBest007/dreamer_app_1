@@ -1,17 +1,17 @@
 // DreamResultScreen
-import 'package:cloud_firestore/cloud_firestore.dart'; // เพิ่ม import Firestore
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 
 class DreamResultScreen extends StatelessWidget {
-  final String dreamId; // id ของ document
+  final String dreamId; 
   final String dreamTitle;
   final String dreamStory;
   final String dreamImageUrl;
   final List<Map<String, dynamic>> dreamInterpretation;
   final String luckyNumber;
-  final String model; // เก็บว่าใช้โมเดลอะไร
+  final String model; 
 
   const DreamResultScreen({
     required this.dreamId,
