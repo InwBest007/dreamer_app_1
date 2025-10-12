@@ -1,10 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'favorite_sleepsound_screen.dart';
@@ -19,8 +19,8 @@ class CloudSleepSoundScreen extends StatefulWidget {
 class _CloudSleepSoundScreenState extends State<CloudSleepSoundScreen> {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final AudioPlayer _player = AudioPlayer();
-  final _userId = FirebaseAuth.instance.currentUser?.uid;
   final _firestore = FirebaseFirestore.instance;
+  final _userId = FirebaseAuth.instance.currentUser?.uid;
 
   bool _loading = true;
   Map<String, List<_SoundItem>> _groupedSounds = {};
@@ -37,11 +37,7 @@ class _CloudSleepSoundScreenState extends State<CloudSleepSoundScreen> {
   void initState() {
     super.initState();
     _fetchSounds();
-
     _player.setLoopMode(LoopMode.one);
-    _player.playerStateStream.listen((s) {
-      print('[🎧] state=${s.processingState}, playing=${s.playing}');
-    });
   }
 
   @override
@@ -52,154 +48,127 @@ class _CloudSleepSoundScreenState extends State<CloudSleepSoundScreen> {
     super.dispose();
   }
 
- Future<void> _fetchSounds() async {
-  try {
-    final ref = _storage.ref("sleep_sounds");
-    final listResult = await ref.listAll();
-    final allItems = <_SoundItem>[];
+  // ======================== LOAD SOUND ===========================
+  Future<void> _fetchSounds() async {
+    try {
+      final ref = _storage.ref("sleep_sounds");
+      final listResult = await ref.listAll();
+      final user = FirebaseAuth.instance.currentUser;
+      final favRef = _firestore.collection('favorites').doc(user?.uid).collection('songs');
+      final favSnapshot = await favRef.get();
+      final favoriteUrls = favSnapshot.docs.map((d) => d.id).toSet();
 
-    // ✅ 1. โหลดรายการ Favorite จาก Firestore
-    final user = FirebaseAuth.instance.currentUser;
-    final favRef = FirebaseFirestore.instance
-        .collection('favorites')
-        .doc(user?.uid)
-        .collection('songs');
-
-    final favSnapshot = await favRef.get();
-    final favoriteUrls = favSnapshot.docs.map((doc) => doc.id).toSet();
-
-    // ✅ 2. โหลดเสียงทั้งหมดจาก Firebase Storage
-    for (final item in listResult.items) {
-      if (_isAudio(item.name)) {
-        final url = await item.getDownloadURL();
-        final category = _guessCategory(item.name);
-        final isFavorite = favoriteUrls.contains(url); // เช็คว่า URL นี้ถูกกด Favorite หรือยัง
-
-        allItems.add(
-          _SoundItem(
-            title: _formatName(item.name),
-            category: category,
-            url: url,
-            isFavorite: isFavorite,
-          ),
-        );
+      final allItems = <_SoundItem>[];
+      for (final item in listResult.items) {
+        if (_isAudio(item.name)) {
+          final url = await item.getDownloadURL();
+          final category = _guessCategory(item.name);
+          allItems.add(
+            _SoundItem(
+              title: _formatName(item.name),
+              category: category,
+              url: url,
+              isFavorite: favoriteUrls.contains(url),
+            ),
+          );
+        }
       }
-    }
 
-    // ✅ 3. จัดกลุ่มตามหมวดหมู่
-    final Map<String, List<_SoundItem>> grouped = {};
-    for (var item in allItems) {
-      grouped.putIfAbsent(item.category, () => []).add(item);
-    }
+      final Map<String, List<_SoundItem>> grouped = {};
+      for (var item in allItems) {
+        grouped.putIfAbsent(item.category, () => []).add(item);
+      }
 
-    setState(() {
-      _groupedSounds = grouped;
-      _loading = false;
-    });
-  } catch (e) {
-    setState(() => _loading = false);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('โหลดเสียงล้มเหลว: $e')),
-    );
+      setState(() {
+        _groupedSounds = grouped;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('โหลดเสียงล้มเหลว: $e')));
+    }
   }
-}
-
 
   bool _isAudio(String name) => name.toLowerCase().endsWith('.mp3');
-
-  String _formatName(String fileName) {
-    final name = fileName.split('.').first.replaceAll(RegExp(r'[_\-]+'), ' ');
-    return name.split(' ').map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '').join(' ');
-  }
-
-  String _guessCategory(String fileName) {
-    final lower = fileName.toLowerCase();
+  String _formatName(String file) => file.split('.').first.replaceAll('_', ' ');
+  String _guessCategory(String name) {
+    final lower = name.toLowerCase();
     if (lower.contains('rain')) return 'เสียงฝน 🌧';
     if (lower.contains('bird')) return 'เสียงนก 🐦';
-    if (lower.contains('forest')) return 'เสียงธรรมชาติ 🌲';
-    if (lower.contains('water') || lower.contains('stream')) return 'เสียงน้ำไหล 💧';
+    if (lower.contains('forest')) return 'เสียงป่า 🌲';
+    if (lower.contains('water')) return 'เสียงน้ำ 💧';
     return 'เสียงอื่น ๆ 🌙';
   }
+
+  // ======================== DOWNLOAD ===========================
   Future<String> _getLocalFilePath(String title) async {
-  final dir = await getApplicationDocumentsDirectory();
-  return '${dir.path}/$title.mp3';
-}
-
-Future<bool> _isDownloaded(String title) async {
-  final path = await _getLocalFilePath(title);
-  return File(path).exists();
-}
-
-Future<void> _downloadFile(String url, String title) async {
-  final path = await _getLocalFilePath(title);
-  try {
-    await Dio().download(url, path);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ ดาวน์โหลดเสร็จแล้ว: $title')));
-    setState(() {}); // Refresh ปุ่มดาวน์โหลด
-  } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ ดาวน์โหลดล้มเหลว: $e')));
+    final dir = await getApplicationDocumentsDirectory();
+    return '${dir.path}/$title.mp3';
   }
-}
 
+  Future<bool> _isDownloaded(String title) async {
+    final path = await _getLocalFilePath(title);
+    return File(path).exists();
+  }
+
+  Future<void> _downloadFile(String url, String title) async {
+    final path = await _getLocalFilePath(title);
+    try {
+      await Dio().download(url, path);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ ดาวน์โหลดเสร็จแล้ว: $title')));
+      setState(() {});
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ ดาวน์โหลดล้มเหลว: $e')));
+    }
+  }
+
+  // ======================== PLAYER ===========================
   Future<void> _play(String url, String title) async {
-  final localPath = await _getLocalFilePath(title);
-  final useLocal = await File(localPath).exists();
+    final localPath = await _getLocalFilePath(title);
+    final useLocal = await File(localPath).exists();
 
-  if (_currentlyPlaying == url) {
-    if (_player.playing) {
+    if (_currentlyPlaying == url && _player.playing) {
       await _player.pause();
-    } else {
+      setState(() {});
+      return;
+    }
+
+    await _player.stop();
+    _cancelSleepTimer();
+
+    try {
+      if (useLocal) {
+        await _player.setFilePath(localPath);
+      } else {
+        await _player.setUrl(url);
+      }
       await _player.play();
+      setState(() => _currentlyPlaying = url);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('เล่นเสียงไม่ได้: $e')));
     }
-    setState(() {});
-    return;
   }
 
-  await _player.stop();
-  _cancelSleepTimer();
-
-  try {
-    if (useLocal) {
-      await _player.setFilePath(localPath);
-    } else {
-      await _player.setUrl(url);
-    }
-    await _player.play();
-    setState(() => _currentlyPlaying = url);
-
-    if (_sleepDuration != null) {
-      _startSleepTimer(_sleepDuration!);
-    }
-  } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('เล่นเสียงไม่ได้: $e')),
-    );
-  }
-}
-
+  // ไว้เก็บเพลงที่ชอบ 
   void _toggleFavorite(_SoundItem sound) async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return;
 
-  final favRef = FirebaseFirestore.instance
+  final favRef = _firestore
       .collection('favorites')
       .doc(user.uid)
       .collection('songs')
-      .doc(sound.title); // ใช้ title เป็น id เอกสาร
+      .doc(sound.title); // ✅ ใช้ title แทน url
 
   if (sound.isFavorite) {
-    await favRef.delete(); // ❌ ลบออกจาก favorite
+    await favRef.delete();
   } else {
     await favRef.set({
       'title': sound.title,
       'url': sound.url,
       'category': sound.category,
       'timestamp': FieldValue.serverTimestamp(),
-    }); // ✅ เพิ่มเข้า favorite
+    });
   }
 
   setState(() {
@@ -207,24 +176,15 @@ Future<void> _downloadFile(String url, String title) async {
   });
 }
 
-
+  
   void _startSleepTimer(Duration duration) {
     _sleepDeadline = DateTime.now().add(duration);
-    _sleepDuration = duration;
-
     _sleepTimer?.cancel();
     _sleepTimer = Timer(duration, () async {
       await _player.stop();
-      setState(() {
-        _currentlyPlaying = null;
-        _remainingText = '';
-        _sleepDuration = null;
-        _sleepDeadline = null;
-      });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⏱ ครบเวลา หยุดเสียงอัตโนมัติ')),
-      );
+      _cancelSleepTimer();
+      setState(() => _currentlyPlaying = null);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🕒 ครบเวลา หยุดเสียงอัตโนมัติ')));
     });
 
     _uiTimer?.cancel();
@@ -240,17 +200,12 @@ Future<void> _downloadFile(String url, String title) async {
         _remainingText = '${remaining.inMinutes} นาที ${remaining.inSeconds % 60} วินาที';
       });
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('⏱ จะหยุดเสียงใน ${duration.inMinutes} นาที')),
-    );
   }
 
   void _cancelSleepTimer() {
     _sleepTimer?.cancel();
     _uiTimer?.cancel();
     setState(() {
-      _sleepDuration = null;
       _sleepDeadline = null;
       _remainingText = '';
     });
@@ -259,26 +214,24 @@ Future<void> _downloadFile(String url, String title) async {
   void _showSleepTimerDialog() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E2A38),
+      backgroundColor: const Color(0xFF303F9F),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(12),
-            child: Text('ตั้งเวลาในการเล่นเพลง', style: TextStyle(color: Colors.white)),
-          ),
-          for (final min in [15, 30, 60, 90, 120])
+          const SizedBox(height: 10),
+          const Text('⏱ ตั้งเวลาในการเล่น', style: TextStyle(color: Colors.white, fontSize: 18)),
+          const SizedBox(height: 10),
+          for (final min in [15, 30, 60, 90])
             ListTile(
-              title: Text('$min นาที', style: const TextStyle(color: Colors.white)),
+              title: Text('$min นาที', style: const TextStyle(color: Colors.white70)),
               onTap: () {
                 Navigator.pop(context);
                 if (_player.playing) {
                   _startSleepTimer(Duration(minutes: min));
                 } else {
-                  _sleepDuration = Duration(minutes: min);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('⏱ จะเริ่มนับเมื่อเริ่มเล่นเสียง')),
                   );
@@ -295,125 +248,136 @@ Future<void> _downloadFile(String url, String title) async {
               );
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
+  // ======================== UI ===========================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1B2A),
+      backgroundColor: const Color(0xFFEEF1FB),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1B263B),
-        title: const Text('เสียงช่วยนอนหลับ', style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: const Color(0xFF5B5BE0),
+        title: const Text('เสียงช่วยนอนหลับ 🌙', style: TextStyle(color: Colors.white)),
+        centerTitle: true,
         actions: [
           if (_remainingText.isNotEmpty)
             Center(
               child: Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Text('⏱ $_remainingText', style: const TextStyle(color: Colors.greenAccent)),
+                padding: const EdgeInsets.only(right: 10),
+                child: Text('⏱ $_remainingText', style: const TextStyle(color: Colors.white70)),
               ),
             ),
           IconButton(
             icon: const Icon(Icons.favorite, color: Colors.pinkAccent),
             tooltip: 'ดูเพลงโปรด',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const FavoriteSleepsoundScreen()),
-              );
-            },
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FavoriteSleepsoundScreen()),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.timer, color: Colors.white),
             onPressed: _showSleepTimerDialog,
           ),
-          IconButton(
-            icon: const Icon(Icons.stop_circle_outlined, color: Colors.white),
-            onPressed: () async {
-              await _player.stop();
-              _cancelSleepTimer();
-              setState(() => _currentlyPlaying = null);
-            },
-          ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: _groupedSounds.entries.map((entry) {
-                final category = entry.key;
-                final sounds = entry.value;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        category,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+          : Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF5B5BE0), Color(0xFF9FA8DA)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: _groupedSounds.entries.map((entry) {
+                  final category = entry.key;
+                  final sounds = entry.value;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Text(
+                          category,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    ...sounds.map((s) {
-                      final isPlaying = _currentlyPlaying == s.url && _player.playing;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E2A38),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ListTile(
-                          title: Text(s.title, style: const TextStyle(color: Colors.white)),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // ❤️ ปุ่ม Favorite
-                              IconButton(
-                                icon: Icon(
-                                  s.isFavorite ? Icons.favorite : Icons.favorite_border,
-                                  color: s.isFavorite ? Colors.redAccent : Colors.white70,
-                                ),
-                                onPressed: () => _toggleFavorite(s),
-                              ),
-
-                              // ▶️ ปุ่มเล่นเสียง
-                              IconButton(
-                                icon: Icon(isPlaying ? Icons.pause_circle : Icons.play_circle_fill),
-                                iconSize: 32,
-                                color: isPlaying ? Colors.cyanAccent : Colors.white70,
-                                onPressed: () => _play(s.url, s.title),
-                              ),
-
-                              IconButton(
-                                icon: const Icon(Icons.download_for_offline),
-                                color: Colors.white70,
-                                onPressed: () async {
-                                  final isDownloaded = await _isDownloaded(s.title);
-                                  if (isDownloaded) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('📂 โหลดไว้แล้ว: ${s.title}')),
-                                    );
-                                  } else {
-                                    await _downloadFile(s.url, s.title);
-                                  }
-                                },
+                      ...sounds.map((s) {
+                        final isPlaying = _currentlyPlaying == s.url && _player.playing;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: isPlaying
+                                  ? [Colors.cyanAccent.withOpacity(0.3), Colors.blueAccent.withOpacity(0.3)]
+                                  : [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 6,
+                                offset: const Offset(2, 3),
                               ),
                             ],
                           ),
-                        ),
-                      );
-                    }),
-                  ],
-                );
-              }).toList(),
+                          child: ListTile(
+                            title: Text(
+                              s.title,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    s.isFavorite ? Icons.favorite : Icons.favorite_border,
+                                    color: s.isFavorite ? Colors.redAccent : Colors.white70,
+                                  ),
+                                  onPressed: () => _toggleFavorite(s),
+                                ),
+                                IconButton(
+                                  icon: Icon(isPlaying ? Icons.pause_circle : Icons.play_circle_fill),
+                                  iconSize: 32,
+                                  color: isPlaying ? Colors.cyanAccent : Colors.white70,
+                                  onPressed: () => _play(s.url, s.title),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.download_for_offline, color: Colors.white70),
+                                  onPressed: () async {
+                                    final isDownloaded = await _isDownloaded(s.title);
+                                    if (isDownloaded) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('📂 โหลดไว้แล้ว: ${s.title}')),
+                                      );
+                                    } else {
+                                      await _downloadFile(s.url, s.title);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  );
+                }).toList(),
+              ),
             ),
     );
   }
@@ -423,9 +387,6 @@ class _SoundItem {
   final String title;
   final String url;
   final String category;
-  bool isFavorite; //ไว้บันทึกเพลงโปรด
-
-  _SoundItem({required this.title, required this.url, required this.category, this.isFavorite = false,});
-
-  //String get fileName => Uri.parse(url).pathSegments.last;
+  bool isFavorite;
+  _SoundItem({required this.title, required this.url, required this.category, this.isFavorite = false});
 }
