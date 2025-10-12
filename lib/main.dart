@@ -47,11 +47,10 @@ class MyApp extends StatelessWidget {
           );
         },
 
-        '/stats': (context) => const DreamStatScreen(), // เพิ่มเส้นทางสถิติ
+        '/stats': (context) => const DreamStatScreen(), 
 
-        // ลบ '/loading' route ออกเพื่อหลีกเลี่ยง passing null เป็น processDream
-        // การเรียก DreamLoadingScreen ควรทำแบบ dynamic (MaterialPageRoute) จากจุดที่มี process function
       },
     );
   }
 }
+
