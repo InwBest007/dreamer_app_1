@@ -86,7 +86,7 @@ async def analyze_dream(req: DreamRequest):
     }
 
 # ----------------------------
-# 🔹 Endpoint ใหม่ (AI Model)
+# Endpoint ใหม่ (AI Model)
 # ----------------------------
 @app.post("/analyze_ai")
 async def analyze_dream_ai(req: DreamRequest):
@@ -171,3 +171,4 @@ async def analyze_dream_ai(req: DreamRequest):
 # uvicorn dream_api:app --reload --host 0.0.0.0 --port 8000 (Android Emulator)
 # http://127.0.0.1:8000/docs
 # http://127.0.0.1:7860/
+
