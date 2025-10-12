@@ -20,7 +20,7 @@ class _DreamLoadingScreenState extends State<DreamLoadingScreen> {
     _processDream();
   }
 
-  // จำลองแถบโหลดไหลขึ้นทีละนิด (ระหว่างรอผลจริง)
+  // จำลองแถบโหลด
   void _simulateProgress() {
     Future.doWhile(() async {
       await Future.delayed(const Duration(milliseconds: 300));
@@ -34,7 +34,7 @@ class _DreamLoadingScreenState extends State<DreamLoadingScreen> {
     });
   }
 
-  // เรียกฟังก์ชันประมวลผลจริง
+  // เรียกฟังก์ชันประมวลผล
   Future<void> _processDream() async {
     try {
       final result = await widget.processDream();
@@ -47,7 +47,7 @@ class _DreamLoadingScreenState extends State<DreamLoadingScreen> {
 
       await Future.delayed(const Duration(seconds: 1));
 
-      // ไปหน้าผลลัพธ์
+      // ไปหน้าแสดงผลคำทำนาย
       Navigator.pushReplacementNamed(
         context,
         '/result',
@@ -88,7 +88,6 @@ class _DreamLoadingScreenState extends State<DreamLoadingScreen> {
                   )),
               const SizedBox(height: 24),
 
-              // ใช้ ClipRRect เพื่อให้ LinearProgressIndicator มุมโค้ง
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
