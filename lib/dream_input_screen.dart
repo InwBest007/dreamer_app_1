@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 
-// เพิ่ม import สำหรับหน้ารอประมวลผล
+// เพิ่ม import สำหรับหน้าจอรอประมวลผล
 import 'dream_loading_screen.dart';
 
 class DreamInputScreen extends StatefulWidget {
@@ -81,7 +81,7 @@ class _DreamInputScreenState extends State<DreamInputScreen> {
           ? "http://10.0.2.2:8000"
           : "http://localhost:8000";
 
-      // ✅ เลือก endpoint ตามโมเดล
+      // เลือก endpoint ตามโมเดล
       final endpoint =
           (selectedPrediction == "AI") ? "/analyze_ai" : "/analyze";
 
@@ -298,3 +298,4 @@ class _DreamInputScreenState extends State<DreamInputScreen> {
     );
   }
 }
+
