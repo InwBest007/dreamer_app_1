@@ -1,3 +1,4 @@
+# dow grade google translate: pip install googletrans==4.0.0-rc1
 #แก้ไข synonym, translate แล้ว สามารถใช้งานได้  ดู debug ได้
 # dream_api.py
 from fastapi import FastAPI
