@@ -1,10 +1,9 @@
-# dream_api.py ทดสอบเปลี่ยน package typo
+# dream_api.py ทดสอบเปลี่ยน package typo thaispellcheck พร้อม approval จาก user (work)
 from fastapi import FastAPI
 from pydantic import BaseModel
 from pythainlp import word_tokenize
 import thaispellcheck
 import httpx
-
 from fastapi import Header, HTTPException, Depends, status
 from typing import Optional, List
 import requests  # ยังเก็บไว้ถ้าตรงไหนยังใช้อยู่ (แต่เราใช้ httpx เป็นหลักใน async)
@@ -218,9 +217,8 @@ async def analyze_dream(req: DreamRequest):
 
         # แปลข้อความความฝันเป็นอังกฤษ (ยังใช้ googletrans แบบ synchronous)
         try:
-            translation = await asyncio.to_thread(translator.translate, dream_text, 'th', 'en')
+            translation = await asyncio.to_thread(translator.translate, dream_text, src='th', dest='en')
             dream_text_en = getattr(translation, "text", None) or str(translation)
-            print("[DEBUG] English translation:", dream_text_en)
         except Exception as e:
             print("[DEBUG] Translation error:", e)
             dream_text_en = dream_text
@@ -228,13 +226,35 @@ async def analyze_dream(req: DreamRequest):
         # 4. Generate Image ด้วย Local Stable Diffusion (เรียกแบบ async)
         image_url = await call_stable_diffusion(f"illustration in cartoon style of dream: {dream_text_en}, fantasy, soft colors, highly detailed", timeout=60)
 
-        all_keywords = set(corrected_tokens) | synonyms
+        # กรอง corrected_tokens เอา token ว่าง/space ออก และเก็บลำดับตามต้นฉบับ
+        filtered_tokens = [t for t in corrected_tokens if isinstance(t, str) and t.strip()]
+
+        # สร้างลิสต์ลำดับ (ordered) โดยเริ่มจาก tokens ตามลำดับที่ตัดมา
+        ordered = []
+        for t in filtered_tokens:
+            if t not in ordered:
+                ordered.append(t)
+            # เพิ่มคำพ้องที่เกี่ยวข้องกับ token นั้นตามลำดับที่ find_synonyms คืน (ถ้ามี)
+            try:
+                syns_for_token = find_synonyms(t)
+                for s in syns_for_token:
+                    if isinstance(s, str) and s.strip() and s not in ordered:
+                        ordered.append(s)
+            except Exception:
+                pass
+
+        # ถ้ายังมีคำพ้องที่หาได้ก่อนหน้านี้แต่ยังไม่ได้เพิ่ม (กรณี find_synonyms ถูกเรียกก่อนหน้าเป็นชุด),
+        # ให้เพิ่มท้ายสุดเพื่อไม่ให้หายไป
+        for s in synonyms:
+            if isinstance(s, str) and s.strip() and s not in ordered:
+                ordered.append(s)
 
         return {
-            "tokens": corrected_tokens,
-            "matched_keywords": list(all_keywords),
+            "tokens": filtered_tokens,
+            "matched_keywords": ordered,
             "image_url": image_url
         }
+
     except HTTPException:
         # ให้ HTTPException propagate (เช่นจาก call_ollama_generate)
         raise
@@ -251,9 +271,8 @@ async def analyze_dream_ai(req: DreamRequest):
 
     # แปลข้อความ (ยังเป็น synchronous googletrans — ระวังความหน่วง ถ้าต้องการให้ non-blocking ให้รันใน thread)
     try:
-        translation = await asyncio.to_thread(translator.translate, dream_text, 'th', 'en')
-        dream_text_en = getattr(translation, "text", str(translation))
-        print("[DEBUG] English translation:", dream_text_en)
+        translation = await asyncio.to_thread(translator.translate, dream_text, src='th', dest='en')
+        dream_text_en = getattr(translation, "text", None) or str(translation)
     except Exception as e:
         print("[DEBUG] Translation error:", e)
         dream_text_en = dream_text
@@ -269,7 +288,7 @@ async def analyze_dream_ai(req: DreamRequest):
 
     # 2) Prepare prompts
     interpretation_prompt = (
-        "คุณคือผู้เชี่ยวชาญด้านการทำนายฝันแบบไทย\n"
+        "คุณคือผู้เชี่ยวชาญด้านแปลความฝันในเชิงสัญลักษณ์\n"
         "จงตอบเฉพาะเป็นภาษาไทยเท่านั้น ห้ามใช้ภาษาอื่น\n"
         "อย่าใส่เลขเด็ดหรือสัญลักษณ์ตัวเลขใด ๆ ในคำตอบนี้\n" 
         "จงให้คำทำนายมีความหมายชัดเจนและจบประโยคครบถ้วน\n"
@@ -279,7 +298,7 @@ async def analyze_dream_ai(req: DreamRequest):
     )
 
     number_prompt = (
-        "คุณเป็นนักโหราศาสตร์ไทยที่เชี่ยวชาญการตีเลขจากความฝัน\n"
+        "คุณคือนักโหราศาสตร์ไทยที่เชี่ยวชาญการตีเลขจากความฝัน\n"
         "ให้แปลความฝันนี้ออกมาเป็นเลขเด็ดไม่เกิน 3 ชุด\n"
         "จงตอบเฉพาะตัวเลขอารบิกเท่านั้น เช่น 25, 526, 789\n"
         "ห้ามมีคำอธิบายเพิ่มเติมหรือคำไทยใด ๆ ในคำตอบ\n" 
@@ -309,13 +328,15 @@ async def analyze_dream_ai(req: DreamRequest):
     }
 
 # Run server
+
 # cd  C:\Users\ASUS\Project_Python\pythonProject
 # .\.venv_llama\Scripts\Activate.ps1
+# python -c "import sys; print('python=', sys.executable); print('version=', sys.version)"
 # curl -v http://100.104.205.64:8000/health
-# uvicorn dream_api:app --host 0.0.0.0 --port 8000 --reload (รัน uvicorn ให้ฟังทุก interface)
+# python -m uvicorn dream_api:app --host 0.0.0.0 --port 8000 --reload
 
+# uvicorn dream_api:app --host 0.0.0.0 --port 8000 --reload (รัน uvicorn ให้ฟังทุก interface)
 # uvicorn dream_api:app --reload
 # uvicorn dream_api:app --reload --host 0.0.0.0 --port 8000 (Android Emulator)
 # http://127.0.0.1:8000/docs
 # http://127.0.0.1:7860/
-
