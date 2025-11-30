@@ -190,9 +190,6 @@ async def call_stable_diffusion(prompt_en: str, timeout: int = 60):
 
 
 async def call_ollama_generate(prompt: str, model: str = "llama3.2", max_predict: int = 512, timeout: int = 180):
-    """
-    Fallback call to Ollama HTTP API. Returns response string or raises HTTPException.
-    """
     url = "http://localhost:11434/api/generate"
     body = {
         "model": model,
