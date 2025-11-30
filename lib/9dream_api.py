@@ -60,39 +60,26 @@ init_semantic_engine()
 def semantic_match_sentence(
     sentence: str,
     top_k: int = 5,
-    sim_threshold: float = 0.6,  # ⚠ ลดจาก 0.7 -> 0.6
+    sim_threshold: float = 0.6,  
 ):
-    """
-    semantic match แบบประโยคเดียว:
-    - encode ประโยคเต็ม
-    - หา keyword ที่ใกล้ที่สุด top_k
-    - ถ้าคะแนน >= threshold จะถือว่า "มั่นใจ"
-    - ถ้าไม่มีตัวไหนผ่าน threshold เลย -> fallback เลือก top_k ตัวบนสุด (แม้จะต่ำกว่า threshold)
-    """
     if EMBED_MODEL is None or KEYWORD_EMB is None:
         print("[SEMANTIC] Engine not initialized.")
         return {}
-
-    # 1) encode sentence
+    # 1) 
     s_emb = EMBED_MODEL.encode(
         [sentence],
         convert_to_numpy=True,
         normalize_embeddings=True
     )[0]  # shape (dim,)
 
-    # 2) cosine similarity = dot (เพราะ normalize แล้ว)
-    sims = KEYWORD_EMB @ s_emb  # shape (N_keywords,)
+    # 2) cosine similarity 
+    sims = KEYWORD_EMB @ s_emb  
 
-    # debug ดูค่าที่ใกล้ที่สุด
-    max_sim = float(sims.max())
-    print(f"[SEMANTIC] Max similarity for sentence '{sentence[:30]}...': {max_sim:.4f}")
-
-    # 3) เลือก index อันดับบนสุด
+    # 3) เลือก index top 5
     top_idx = np.argsort(-sims)[:top_k]
 
     results: dict[str, dict] = {}
 
-    # รอบแรก: เก็บเฉพาะตัวที่ >= threshold
     for idx in top_idx:
         score = float(sims[idx])
         if score < sim_threshold:
@@ -101,7 +88,7 @@ def semantic_match_sentence(
         kw = KEYWORD_LIST[idx]
         interp = KEYWORD_INTERPS[idx]
         luck = KEYWORD_LUCKY[idx]
-
+        
         results[kw] = {
             "keyword": kw,
             "interpretation": interp,
