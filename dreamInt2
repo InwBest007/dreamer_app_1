@@ -1,0 +1,86 @@
+//การขูดข้อมูลจาก myhora
+from bs4 import BeautifulSoup
+import time
+import random
+import requests
+import re
+import pandas as pd
+
+# url หน้าแรกที่รวมลิงก์หมวดอักษร
+base_url = "https://www.myhora.com/%e0%b8%94%e0%b8%b9%e0%b8%94%e0%b8%a7%e0%b8%87-%e0%b8%97%e0%b8%b3%e0%b8%99%e0%b8%b2%e0%b8%a2%e0%b8%9d%e0%b8%b1%e0%b8%99.aspx?dream=%e0%b8%81#go"
+
+# ขอเว็บ
+res = requests.get(base_url)
+soup = BeautifulSoup(res.text, 'html.parser')
+
+# ดึงลิงก์หมวดอักษรที่ class='dtab'
+alphabet_links = []
+base_path = "https://www.myhora.com/"
+
+for a in soup.find_all('a', class_='dtab'):
+    href = a.get('href')
+    if href:
+        full_url = base_path + href # + ลิงก์ก-ฮเข้าไปที่ base_path
+        alphabet_links.append(full_url) # เก็บลิงค์อักษรเในลิสต์
+
+count = 2000
+countls = []
+keywordls = []
+contentls = []
+interpretationls =[]
+luckynumberls = []
+
+for url in alphabet_links:
+    res = requests.get(url)
+    soup = BeautifulSoup(res.text, 'html.parser')
+
+    time.sleep(random.uniform(3, 6))
+
+    dream_keyword = soup.find_all('div', class_='dn')
+    dream_content = soup.find_all('div', class_='dx')
+    lucky_blocks = soup.find_all('font', class_='dl')
+
+    keywords = [i.find('a').text.strip() for i in dream_keyword]
+
+    for i in range(len(keywords)):
+        # คำสำคัญ
+        keyword = keywords[i] if i < len(keywords) else "(ไม่มีคีย์เวิร์ด)"
+
+        # เนื้อหาฝัน และคำทำนายฝัน
+        if i < len(dream_content):
+            raw = dream_content[i].get_text()
+            split = re.split(
+                r"ทำนาย(?:ได้)?ว่า|(?:ท่าน|ผู้ฝัน|\(ฝันมัก)?จะได้|ทายวา|ทายว่า|ฝันชนิดนี้|(?:ความ)?ฝันนี้จะ|ในตำรา|ตามตำรา|(?:คำ)?ทำนาย|เป็นนิมิต|ถ้าเป็นหญิง|ถ้าเป็นชาย|โบราณท่านว่า|มายว่า",
+                raw,
+                maxsplit=1
+            )
+            content = split[0].strip()
+            interpretation = split[1].strip() if len(split) > 1 else "(ไม่มีคำทำนาย)"
+        else:
+            content = "(ไม่มีเนื้อหา)"
+            interpretation = "(ไม่มีคำทำนาย)"
+
+        # เลขนำโชค
+        if i < len(lucky_blocks):
+            found = lucky_blocks[i].find('font', class_='dl3')
+            lucky = found.text.strip() if found else "(ไม่มีเลขนำโชค)"
+        else:
+            lucky = "(ไม่มีเลขนำโชค)"
+
+        # ทดสอบแสดงผล
+        print(f"count: {count} | Keyword: {keyword} | Content: {content} | Interpretation: {interpretation} | Lucky Number: {lucky}")
+        countls.append(count)
+        count += 1
+
+        # ลิสต์เก็บข้อมูล
+        keywordls.append(keyword)
+        contentls.append(content)
+        interpretationls.append(interpretation)
+        luckynumberls.append(lucky)
+
+        # เก็บข้อมูล
+df = pd.DataFrame({'id': countls, 'keyword': keywordls, 'content': contentls, 'interpretation': interpretationls,
+                   'luckynumber': luckynumberls})
+df.to_csv('DBdreamer.csv', index=False, encoding='utf-8-sig')
+
+
