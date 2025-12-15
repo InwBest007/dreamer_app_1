@@ -1,0 +1,73 @@
+//เตรียมฐานข้อมูลทำนายฝันโหราศาสตร์ไทย
+//การขูดข้อมูลจากไฟล์หนังเสือเลขนำโชคไทย (แสกนไฟล์ pdf แล้วถอดตัวอักษรเป็น txt)
+import re
+import pandas as pd
+from rapidfuzz import fuzz
+
+//นำเข้าไฟล์ txt 2 ไฟล์ ไฟล์แรกเก็บข้อมูลเนื้อหาฝัน-คำทำนาย ไฟล์สองเก็บข้อมูลเลขนำโชค
+with open(r"C:\Users\ASUS\Project_Python\pythonProject\dreamIntSU3.txt", "r", encoding="utf-8") as dreamInt:
+    txt = dreamInt.readlines()
+with open(r"C:\Users\ASUS\Project_Python\pythonProject\luckyNum.txt", "r", encoding="utf-8") as luckyNum:
+    txt2 = luckyNum.readlines()
+
+    content = []
+    interpretation = []
+    count = 1000
+
+    idls = []
+    dreamContentls = []
+    interpretationls = []
+    luckyNumls = []
+
+    for line in txt:
+        if re.search(r"(?:ขอ)?ทายว่า", line):
+            split_txt = re.split("(?:ขอ)?ทายว่า", line, maxsplit=1)
+            if len(split_txt) == 2:
+                content.append(split_txt[0].strip())
+                interpretation.append((split_txt[1]).strip())
+
+    lucky_pairs = []
+
+    thai_to_arabic = {
+        '๐': '0', '๑': '1', '๒': '2', '๓': '3', '๔': '4',
+        '๕': '5', '๖': '6', '๗': '7', '๘': '8', '๙': '9'
+    }
+
+    for line in txt2:
+        matches = re.findall(r"(.+?)\s([๐-๙\-]+)", line)
+        for word, thai_number in matches:
+            arabic_number = "".join([thai_to_arabic.get(ch, ch) for ch in thai_number])
+            lucky_pairs.append((word.strip(), arabic_number))
+
+    #print("content, interpretation, lucky number")
+
+    matched_num = "ไม่มีเลขนำโชค"
+    for dream, predict in zip(content, interpretation):
+        count = count + 1
+        found = False
+        for lucky_num in lucky_pairs:
+            score = fuzz.partial_ratio(lucky_num[0], dream)
+            if score > 70:
+                matched_num = lucky_num[1]
+                found = True
+                break
+        if not found:
+            matched_num = "ไม่มีเลขนำโชค"
+        #print(count, " ", dream, ", ", predict, ", ", matched_num)
+        idls.append(count)
+        dreamContentls.append(dream)
+        interpretationls.append(predict)
+        luckyNumls.append(matched_num)
+df = pd.DataFrame({'id': idls, 'dream_content': dreamContentls, 'interpretation': interpretationls, 'lucky_number': luckyNumls})
+df.to_csv('txtDreamInt_DB2.csv', index=False, encoding='utf-8-sig')
+
+
+
+        
+
+
+
+
+
+
+
